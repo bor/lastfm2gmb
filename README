@@ -29,5 +29,6 @@ $ lastfm2gmb.pl [-q|-d debuglevel] [-k api_key] -u lastfm_username
 
 KNOWN ISSUES
 
-Problem with duplicate track_title's in different albums - now it only skip this tracks
+* Problem with duplicate track_title's in different albums - now it only skip this tracks
+* Dbus sometimes failing to update values - so I recommend run script several times
 
