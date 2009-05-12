@@ -26,3 +26,8 @@ gmusicbrowser must be running and the music files must be in its library.
 
 $ lastfm2gmb.pl [-q|-d debuglevel] [-k api_key] -u lastfm_username
 
+
+KNOWN ISSUES
+
+Problem with duplicate track_title's in different albums - now it only skip this tracks
+
