@@ -1,0 +1,28 @@
+lastfm2gmb
+========================
+
+Script to import (sync) playcount from last.fm to gmusicbrowser
+lastplay, tags, rating - not realized yet, see TODO
+
+
+DEPENDENCIES
+
+perl >=5.8 (for utf8 correct use)
+Getopt::Long
+LWP::UserAgent
+Net::DBus
+XML::Simple
+gmusicbrowser (with Dbus implemented, tested on 1.0.1)
+
+
+INSTALLATION
+
+Just copy and run :)
+
+
+USAGE
+
+gmusicbrowser must be running and the music files must be in its library.
+
+$ lastfm2gmb.pl [-q|-d debuglevel] [-k api_key] -u lastfm_username
+

@@ -1,0 +1,20 @@
+TODO
+
+* resolve problem with duplicate track_title's in different albums
+    how ?
+
+* lastplay
+    currently not implemented in last.fm API**
+    http://lastfvs.matto1990.com/idea/31/
+
+* labels
+    get from tags ?
+
+* rating
+    loved -> 100%, banned -> 0%
+    currently not implemented in last.fm API**
+
+
+** You may vote for it at
+http://lastfvs.matto1990.com/idea/31/
+http://lastfvs.matto1990.com/idea/29/
