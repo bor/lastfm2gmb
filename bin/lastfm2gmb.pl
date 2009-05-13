@@ -29,7 +29,7 @@ GetOptions(
     or die "$usage\n";
 
 $opt{debug} ||= 0;
-$opt{key} ||= '8d5f0e0916bf3c9f573b1a7c7dd0a8a8';
+$opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';
 $opt{key} or die "Need api key!\n$usage\n";
 $opt{user} or die "Need username!\n$usage\n";
 
