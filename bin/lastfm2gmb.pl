@@ -33,9 +33,6 @@ $opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';
 $opt{key} or die "Need api key!\n$usage\n";
 $opt{user} or die "Need username!\n$usage\n";
 
-# lastFM URL
-our $gettracks_url = "http://ws.audioscrobbler.com/2.0/?method=library.gettracks&api_key=$opt{key}&user=$opt{user}";
-
 my $bus = Net::DBus->session;
 my $service = $bus->get_service("org.gmusicbrowser");
 my $object = $service->get_object("/org/gmusicbrowser","org.gmusicbrowser");
@@ -66,22 +63,25 @@ foreach my $id ( @{$object->GetLibrary} ) {
 }
 print " $count tracks\n" unless $opt{quiet};
 
-$count = 0;
-my $totalplays = 0;
-my $error = 0;
-
 our $ua = LWP::UserAgent->new;
 $ua->timeout(15);
 our $xs = XML::Simple->new();
+
+$count = 0;
+my $errors = 0;
+my $totalplays = 0;
+
+# get tracks
+#
 # first request for get totalPages
-my $data = lastfm_request() or die "Cant get data from lastfm";
+my $data = lastfm_request({method=>'library.gettracks'}) or die 'Cant get data from lastfm';
 die "Something wrong: status = $data->{status}" unless $data->{status} eq 'ok';
 my $pages = $data->{tracks}{totalPages};
-print "LastFM found $pages pages, ~".($pages*$data->{tracks}{perPage})." tracks\n" unless $opt{quiet};
+print "LastFM.tracks found $pages pages, ~".($pages*$data->{tracks}{perPage})." tracks\n" unless $opt{quiet};
 
 for ( my $p = 1; $p <= $pages; $p++ ) {
-    print "Page $p\n";
-    my $data = lastfm_request({page=>$p}) or die "Cant get data from lastfm";
+    print "tracks page $p\n";
+    $data = lastfm_request({method=>'library.gettracks',page=>$p}) or die "Cant get data from lastfm";
     foreach my $title ( keys %{$data->{tracks}{track}} ) {
         my $artist = lc($data->{tracks}{track}{$title}{artist}{name});
         #my $lastplay = $data->{tracks}{track}{$title}{};
@@ -96,7 +96,7 @@ for ( my $p = 1; $p <= $pages; $p++ ) {
                 print "  $artist - $title : $library->{$artist}{$title}{playcount} -> $playcount\n";
                 $object->Set([ $library->{$artist}{$title}{id}, 'playcount', $playcount ])
                     or $e++ and warn " error setting 'playcount' to $playcount for track ID $library->{$artist}{$title}{id}\n";
-                $e ? $error++ : $count++;
+                $e ? $errors++ : $count++;
             }
             #if ( $lastplay > $library->{$artist}{$title}{lastplay} ) {
             #    $object->Set([ $library->{$artist}{$title}{id}, 'lastplay', $lastplay ])
@@ -109,12 +109,15 @@ for ( my $p = 1; $p <= $pages; $p++ ) {
     }
     last if $opt{debug} and $p >= 2;
 }
-print "LastFM total plays $totalplays.\nImported playcount for $count tracks. ". ($error ? $error : 'No'). " errors detected.\n";
+print "LastFM total plays $totalplays.\nImported playcount for $count tracks. "
+        . ($errors ? $errors : 'No') . " errors detected.\n"
+    unless $opt{quiet};
 
 
 sub lastfm_request {
     my ($params) = @_;
-    my $url = $gettracks_url;
+    # lastFM request URL
+    my $url = "http://ws.audioscrobbler.com/2.0/?api_key=$opt{key}&user=$opt{user}";
     if ( $params ) {
         $url .= '&'.join('&',map("$_=$params->{$_}",keys %{$params}));
     }
