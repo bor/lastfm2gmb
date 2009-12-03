@@ -1,0 +1,12 @@
+v 0.02, 2009-11-17
+
+ rewrite for use user.getWeeklyTrackChart API method
+ it allows
+  - calc approximately lastplay
+  - use cache for user.getWeeklyTrackChart requests
+
+
+v 0.01, 2009-05-12
+
+ first worked version,
+ used lastfm library.gettracks API method

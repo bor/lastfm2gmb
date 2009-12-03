@@ -1,123 +1,171 @@
 #!/usr/bin/perl
 # $Revision$
 # $Date$
+# Copyright (c) 2009 Sergiy Borodych
+#
+# lastfm2gmb is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3, as
+# published by the Free Software Foundation
 
 use strict;
 use utf8;
 use warnings;
 
 use Encode;
+use File::Spec;
 use Getopt::Long;
 use LWP::UserAgent;
 use Net::DBus;
+use Storable;
 use XML::Simple;
+
+use constant VERSION => 0.02;
 
 binmode(STDOUT, ":utf8");
 
-my $usage = "Usage: $0 [-q|-d debug_level] [-k api_key] -u username";
+my $usage = "lastfm2gmb v".VERSION." (c)2009 Sergiy Borodych
+Usage: $0 [-c] [-q|-d debug_level] [-k api_key] -u username
+Options:
+ -c : enable cache results (only for user.getWeeklyTrackChart method)
+ -d : debug level 0..2
+ -k : lastfm api key
+ -q : set debug = 0 and no any output
+ -t : tmp dir for cache store, etc
+ -u : lastfm username, required
+";
 
 our %opt;
 Getopt::Long::Configure("bundling");
 GetOptions(
-#    'cache|c'       => \$opt{cache},
-    'debug|d=i'     => \$opt{debug},
-    'help|h'        => \$opt{help},
-    'key|k=s'       => \$opt{key},
-    'quiet|q'       => \$opt{quiet},
-    'user|u=s'      => \$opt{user},
+    'api_uri'       => \$opt{api_uri},  # lastFM API request URL
+    'cache|c'       => \$opt{cache},    # enable cache results (only for user.getWeeklyTrackChart method)
+    'debug|d=i'     => \$opt{debug},    # debug level 0..2
+    'help|h'        => \$opt{help},     # help message ?
+    'key|k=s'       => \$opt{key},      # lastfm api key
+    'quiet|q'       => \$opt{quiet},    # set debug = 0 and no any output
+    'tmp_dir|t=s'   => \$opt{tmp_dir},  # tmp dir for cache store, etc
+    'user|u=s'      => \$opt{user},     # lastfm username
 )
     or die "$usage\n";
 
+$opt{api_uri} ||= 'http://ws.audioscrobbler.com/2.0/';
 $opt{debug} ||= 0;
-$opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';
+$opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';       # 'lastfm2gmb' user api key
 $opt{key} or die "Need api key!\n$usage\n";
+$opt{tmp_dir} ||=  File::Spec->catdir( File::Spec->tmpdir(), 'lastfm2gmb' );
 $opt{user} or die "Need username!\n$usage\n";
+
+if ( $opt{cache} and ! -d $opt{tmp_dir} ) {
+    mkdir($opt{tmp_dir}) or die "Can't create tmp dir $opt{tmp_dir}: $!";
+}
 
 my $bus = Net::DBus->session;
 my $service = $bus->get_service("org.gmusicbrowser");
-my $object = $service->get_object("/org/gmusicbrowser","org.gmusicbrowser");
+my $gmb_obj = $service->get_object("/org/gmusicbrowser","org.gmusicbrowser");
+
+$| = 1;
+my %stats = ( imported_playcount => 0, imported_lastplay => 0, lastfm_plays => 0 );
+my $gmb_library = {};
+my $lastfm_library = {};
 
 # get current gmb library
-$| = 1;
 print "Looking up gmb library " unless $opt{quiet};
-my $count = 0;
-my $library = {};
-foreach my $id ( @{$object->GetLibrary} ) {
-    my $artist = $object->Get([$id,'artist']) or next;
-    my $title = $object->Get([$id,'title']) or next;
+print "\n" if $opt{debug} >= 2;
+foreach my $id ( @{$gmb_obj->GetLibrary} ) {
+    my $artist = $gmb_obj->Get([$id,'artist']) or next;
+    my $title = $gmb_obj->Get([$id,'title']) or next;
     utf8::decode($artist);
     utf8::decode($title);
     $artist = lc($artist);
     $title = lc($title);
-    my $playcount = $object->Get([$id,'playcount']) || 0;
+    my $playcount = $gmb_obj->Get([$id,'playcount']) || 0;
+    my $lastplay = $gmb_obj->Get([$id,'lastplay']) || 0;
     # TODO: if multiple song's with same names when skip it now
-    if ( $library->{$artist}{$title} ) {
-        $library->{$artist}{$title} = { skip => 1 };
+    if ( $gmb_library->{$artist}{$title} ) {
+        $gmb_library->{$artist}{$title} = { skip => 1 };
     }
     else {
-        $library->{$artist}{$title} = { id => $id, playcount => $playcount };
+        $gmb_library->{$artist}{$title} = { id => $id, playcount => $playcount, lastplay => $lastplay };
     }
-    warn "$id -> $artist - $title = $playcount\n" if $opt{debug} >= 2;
-    $count++;
-    print '.' unless $opt{quiet} or $count % 100;
+    print "[$id] $artist - $title : playcount : $playcount : lastplay : $lastplay\n" if $opt{debug} >= 2;
+    $stats{gmb_tracks}++;
+    print '.' unless $opt{quiet} or $stats{gmb_tracks} % 100;
+    last if $stats{gmb_tracks} > 100 and $opt{debug} >= 3;
 }
-print " $count tracks\n" unless $opt{quiet};
+print " $stats{gmb_tracks} tracks\n" unless $opt{quiet};
 
-our $ua = LWP::UserAgent->new;
-$ua->timeout(15);
+our $ua = LWP::UserAgent->new( timeout=>15 );
 our $xs = XML::Simple->new();
 
-$count = 0;
-my $errors = 0;
-my $totalplays = 0;
+# get weekly chart list
+my $charts_data = lastfm_request({method=>'user.getWeeklyChartList'}) or die 'Cant get data from lastfm';
+# add current (last) week
+my $last_week_from = $charts_data->{weeklychartlist}{chart}[$#{$charts_data->{weeklychartlist}{chart}}]{to};
+push @{$charts_data->{weeklychartlist}{chart}}, { from=>$last_week_from, to=>time() }
+    if $last_week_from < time();
+print "LastFM request 'WeeklyChartList' found ".scalar(@{$charts_data->{weeklychartlist}{chart}})." pages\n"
+    unless $opt{quiet};
 
-# get tracks
-#
-# first request for get totalPages
-my $data = lastfm_request({method=>'library.gettracks'}) or die 'Cant get data from lastfm';
-die "Something wrong: status = $data->{status}" unless $data->{status} eq 'ok';
-my $pages = $data->{tracks}{totalPages};
-print "LastFM.tracks found $pages pages, ~".($pages*$data->{tracks}{perPage})." tracks\n" unless $opt{quiet};
+# clean 'last week' pages workaround
+unlink(glob(File::Spec->catfile($opt{tmp_dir},"WeeklyTrackChart-$opt{user}-$last_week_from-*")));
 
-for ( my $p = 1; $p <= $pages; $p++ ) {
-    print "tracks page $p\n";
-    $data = lastfm_request({method=>'library.gettracks',page=>$p}) or die "Cant get data from lastfm";
-    foreach my $title ( keys %{$data->{tracks}{track}} ) {
-        my $artist = lc($data->{tracks}{track}{$title}{artist}{name});
-        #my $lastplay = $data->{tracks}{track}{$title}{};
-        my $playcount = $data->{tracks}{track}{$title}{playcount};
+# get weekly track chart
+print "LastFM request 'WeeklyTrackChart' pages " unless $opt{quiet};
+foreach my $date ( @{$charts_data->{weeklychartlist}{chart}} ) {
+    print "$date->{from}-$date->{to}.." if $opt{debug};
+    print '.' unless $opt{quiet};
+    my $data = lastfm_get_weeklytrackchart({from=>$date->{from},to=>$date->{to}});
+    foreach my $title ( keys %{$data->{weeklytrackchart}{track}} ) {
+        my $artist = lc($data->{weeklytrackchart}{track}{$title}{artist}{name}||$data->{weeklytrackchart}{track}{$title}{artist}{content});
+        my $playcount = $data->{weeklytrackchart}{track}{$title}{playcount};
         $title = lc($title);
-        $totalplays += $playcount;
-        warn "$artist - $title - $playcount\n" if $opt{debug} >= 2;
-        if ( $library->{$artist}{$title} and $library->{$artist}{$title}{id} ) {
-            my $e;
-            warn "$artist - $title - $playcount <=> $library->{$artist}{$title}{playcount}\n" if $opt{debug};
-            if ( $playcount > $library->{$artist}{$title}{playcount} ) {
-                print "  $artist - $title : $library->{$artist}{$title}{playcount} -> $playcount\n";
-                $object->Set([ $library->{$artist}{$title}{id}, 'playcount', $playcount ])
-                    or $e++ and warn " error setting 'playcount' to $playcount for track ID $library->{$artist}{$title}{id}\n";
-                $e ? $errors++ : $count++;
-            }
-            #if ( $lastplay > $library->{$artist}{$title}{lastplay} ) {
-            #    $object->Set([ $library->{$artist}{$title}{id}, 'lastplay', $lastplay ])
-            #        or $e++ and warn " error setting 'lastplay' to $lastplay for track ID $library->{$artist}{$title}{id}\n";
-            #}
-            #elsif ( $library->{$artist}{$title}{lastplay} > $data->{tracks}{track}{$title}{lastplay} ) {
-                # TODO: submit to last fm
-            #}
+        print "$artist - $title - $playcount\n" if $opt{debug} >= 2;
+        if ( $gmb_library->{$artist}{$title} and $gmb_library->{$artist}{$title}{id} ) {
+            $lastfm_library->{$artist}{$title}{playcount} += $playcount;
+            $lastfm_library->{$artist}{$title}{lastplay} = $date->{from}
+                if ( !$lastfm_library->{$artist}{$title}{lastplay}
+                        or $lastfm_library->{$artist}{$title}{lastplay} < $date->{from} );
         }
+        $stats{lastfm_plays} += $playcount;
     }
-    last if $opt{debug} and $p >= 2;
+    last if $opt{debug} >= 3;
 }
-print "LastFM total plays $totalplays.\nImported playcount for $count tracks. "
-        . ($errors ? $errors : 'No') . " errors detected.\n"
+print " total $stats{lastfm_plays} plays\n" unless $opt{quiet};
+
+# import info to gmb
+print "Import to gmb " unless $opt{quiet};
+foreach my $artist ( sort keys %{$lastfm_library} ) {
+    print '.' unless $opt{quiet};
+    print "$artist\n" if $opt{debug} >= 2;
+    foreach my $title ( keys %{$lastfm_library->{$artist}} ) {
+        my $e;
+        print " $title - $lastfm_library->{$artist}{$title}{playcount} <=> $gmb_library->{$artist}{$title}{playcount}\n" if $opt{debug} >= 2;
+        if ( $lastfm_library->{$artist}{$title}{playcount} > $gmb_library->{$artist}{$title}{playcount} ) {
+            print "  $artist - $title : playcount : $gmb_library->{$artist}{$title}{playcount} -> $lastfm_library->{$artist}{$title}{playcount}\n" if $opt{debug};
+            $gmb_obj->Set([ $gmb_library->{$artist}{$title}{id}, 'playcount', $lastfm_library->{$artist}{$title}{playcount}])
+                or $e++ and warn " error setting 'playcount' for track ID $gmb_library->{$artist}{$title}{id}\n";
+            $e ? $stats{errors}++ : $stats{imported_playcount}++;
+        }
+        if ( $lastfm_library->{$artist}{$title}{lastplay} > $gmb_library->{$artist}{$title}{lastplay} ) {
+            print "  $artist - $title : lastplay : $gmb_library->{$artist}{$title}{lastplay} -> $lastfm_library->{$artist}{$title}{lastplay}\n" if $opt{debug};
+            $gmb_obj->Set([ $gmb_library->{$artist}{$title}{id}, 'lastplay', $lastfm_library->{$artist}{$title}{lastplay} ])
+                or $e++ and warn " error setting 'lastplay' for track ID $gmb_library->{$artist}{$title}{id}\n";
+            $e ? $stats{errors}++ : $stats{imported_lastplay}++;
+        }
+        #if ( $lastfm_library->{$artist}{$title}{loved} ) {
+        #    # TODO
+        #}
+    }
+}
+
+print "\nImported : playcount - $stats{imported_playcount} tracks, lastplay - $stats{imported_lastplay} tracks. " . ($stats{errors} ? $stats{errors} : 'No') . " errors detected.\n"
     unless $opt{quiet};
 
 
+# lastfm request
 sub lastfm_request {
     my ($params) = @_;
-    # lastFM request URL
-    my $url = "http://ws.audioscrobbler.com/2.0/?api_key=$opt{key}&user=$opt{user}";
+    my $url = "$opt{api_uri}?api_key=$opt{key}&user=$opt{user}";
     if ( $params ) {
         $url .= '&'.join('&',map("$_=$params->{$_}",keys %{$params}));
     }
@@ -129,4 +177,21 @@ sub lastfm_request {
         warn "Error: Can't get url '$url' - " . $response->status_line."\n";
         return;
     }
+}
+
+
+# get weekly track chart list
+sub lastfm_get_weeklytrackchart {
+    my ($params) = @_;
+    my $filename = File::Spec->catfile($opt{tmp_dir}, "WeeklyTrackChart-$opt{user}-$params->{from}-$params->{to}.data");
+    my $data;
+    if ( $opt{cache} and -e $filename ) {
+        $data = retrieve($filename);
+    }
+    else {
+        $data = lastfm_request({method=>'user.getWeeklyTrackChart',%{$params}}) or die 'Cant get data from lastfm';
+        # TODO : strip some data, for left only need info like: artist, name, playcount
+        store $data, $filename if $opt{cache};
+    }
+    return $data;
 }
