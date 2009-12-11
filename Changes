@@ -1,6 +1,12 @@
+v 0.03, 2009-12-04
+
+ add import loved tracks;
+ now can choose mode for import,
+ available modes: a - all, p - playcount & lastplay, l - loved
+
 v 0.02, 2009-11-17
 
- rewrite for use user.getWeeklyTrackChart API method
+ rewrite for use user.getWeeklyTrackChart API method,
  it allows
   - calc approximately lastplay
   - use cache for user.getWeeklyTrackChart requests

@@ -6,6 +6,6 @@ TODO
 * labels
     get from tags ?
 
-* rating
-    loved -> 100%, banned -> 0%
+* rewrite this script as gmb plugin
+    for good perfomance, because use dbus is too slow :(
 
