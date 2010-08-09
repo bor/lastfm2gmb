@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # $Revision$
 # $Date$
-# Copyright (c) 2009 Sergiy Borodych
+# Copyright (c) 2009-2010 Sergiy Borodych
 #
 # lastfm2gmb is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3, as
@@ -23,7 +23,7 @@ use constant VERSION => 0.03;
 
 binmode(STDOUT, ":utf8");
 
-my $usage = "lastfm2gmb v".VERSION." (c)2009 Sergiy Borodych
+my $usage = "lastfm2gmb v".VERSION." (c)2009-2010 Sergiy Borodych
 Usage: $0 [-c] [-q|-d debug_level] [-k api_key] [-m mode] -u username
 Options:
  -c | --cache           : enable cache results (only for 'playcount & lastplay' mode)
@@ -116,7 +116,7 @@ foreach my $id ( @{$gmb_obj->GetLibrary} ) {
 print " $stats{gmb_tracks} tracks ($stats{skiped} skipped as dup)\n" unless $opt{quiet};
 
 our $ua = LWP::UserAgent->new( timeout=>15 );
-our $xs = XML::Simple->new();
+our $xs = XML::Simple->new(ForceArray=>['track']);
 
 # playcount & lastplay
 if ( $opt{mode}=~m/p/ ) {
