@@ -54,6 +54,9 @@ GetOptions(
 )
     or die "$usage\n";
 
+print $usage and exit if $opt{help};
+
+# check options
 $opt{api_uri} ||= 'http://ws.audioscrobbler.com/2.0/';
 $opt{debug} ||= 0;
 $opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';       # 'lastfm2gmb' user api key
@@ -62,12 +65,12 @@ $opt{mode} ||= 'a';
 $opt{mode} = 'pl' if $opt{mode} eq 'a';
 $opt{rating_loved} ||= 100;
 $opt{tmp_dir} ||=  File::Spec->catdir( File::Spec->tmpdir(), 'lastfm2gmb' );
-$opt{user} or die "Need username!\n$usage\n";
+$opt{user} or die "Need username!\n\n$usage\n";
 
 if ( $opt{cache} and ! -d $opt{tmp_dir} ) {
     mkdir($opt{tmp_dir}) or die "Can't create tmp dir $opt{tmp_dir}: $!";
 }
-die "Unknown mode!\n$usage\n" unless $opt{mode}=~/[pl]/;
+die "Unknown mode!\n\n$usage\n" unless $opt{mode}=~/[pl]/;
 
 my $bus = Net::DBus->session;
 my $service = $bus->get_service("org.gmusicbrowser");
