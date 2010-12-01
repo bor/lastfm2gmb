@@ -1,9 +1,9 @@
 lastfm2gmb
 ========================
 
-Script to import (sync) playcount from last.fm to gmusicbrowser
-lastplay, tags, rating - not realized yet, see TODO
-
+Script to import (sync) playcount, lastplay and rating
+ from last.fm to gmusicbrowser.
+tags - not realized yet, see TODO
 
 DEPENDENCIES
 
@@ -14,28 +14,20 @@ Net::DBus
 XML::Simple
 gmusicbrowser (with Dbus implemented, tested on 1.0.X)
 
-
 INSTALLATION
 
 Just copy and run :)
-
 
 USAGE
 
 gmusicbrowser must be running and the music files must be in its library.
 
-$ lastfm2gmb.pl [-c] [-q|-d debuglevel] [-k api_key] -u lastfm_username
+$ lastfm2gmb.pl [-q|-d debuglevel] [...] -u lastfm_username
 
--c, --cache     - enable cache results (only for user.getWeeklyTrackChart method),
-                  example: this can eat about ~8M for 160 weeks in tmp dir
--d, --debug     - debug level (0..2), default 0
--k, --key       - lastfm api key, default use 'lastfm2gmb' user api key
--q, --quiet     - set debug to 0 and suppress any other output
--u, --user      - lastfm username
-
+For more options see:
+$ lastfm2gmb.pl -h 
 
 KNOWN ISSUES
 
 * Problem with duplicate track_title's in different albums - now it only skip this tracks
 * Dbus maybe failing to update values on high traffic (?) - so you may want run script several times
-
