@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # $Revision$
 # $Date$
-# Copyright (c) 2009-2010 Sergiy Borodych
+# Copyright (c) 2009-2011 Sergiy Borodych
 #
 # lastfm2gmb is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3, as
@@ -21,14 +21,14 @@ use XML::Simple;
 
 use constant VERSION => 0.03;
 
-binmode(STDOUT, ":utf8");
+binmode(STDOUT, ":encoding(UTF-8)");
 
 my $usage = "lastfm2gmb v".VERSION." (c)2009-2010 Sergiy Borodych
 Usage: $0 [-c] [-q|-d debug_level] [-k api_key] [-m mode] -u username
 Options:
  -c | --cache           : enable cache results (only for 'playcount & lastplay' mode)
  -d | --debug           : debug level 0..2
- -k | --key             : lastfm api key
+ -k | --key             : lastfm API key
  -m | --mode            : import mode: 'a' - all, 'p' - playcount & lastplay, 'l' - loved
  -q | --quiet           : set debug = 0 and no any output
  -r | --rating_loved    : rating for loved tracks (1..100), default 100
@@ -45,7 +45,7 @@ GetOptions(
     'cache|c'           => \$opt{cache},    # enable cache results (only for user.getWeeklyTrackChart method)
     'debug|d=i'         => \$opt{debug},    # debug level 0..2
     'help|h'            => \$opt{help},     # help message ?
-    'key|k=s'           => \$opt{key},      # lastfm api key
+    'key|k=s'           => \$opt{key},      # lastfm API key
     'mode|m=s'          => \$opt{mode},     # import mode: a - all, p - playcount & lastplay, l - loved
     'quiet|q'           => \$opt{quiet},    # set debug = 0 and no any output
     'rating_loved|r=i'  => \$opt{rating_loved}, # rating for loved tracks (1..100), default 100
@@ -59,8 +59,8 @@ print $usage and exit if $opt{help};
 # check options
 $opt{api_uri} ||= 'http://ws.audioscrobbler.com/2.0/';
 $opt{debug} ||= 0;
-$opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';       # 'lastfm2gmb' user api key
-$opt{key} or die "Need api key!\n$usage\n";
+$opt{key} ||= '4d4019927a5f30dc7d515ede3b3e7f79';       # 'lastfm2gmb' user API key
+$opt{key} or die "Need lastfm API key!\n$usage\n";
 $opt{mode} ||= 'a';
 $opt{mode} = 'pl' if $opt{mode} eq 'a';
 $opt{rating_loved} ||= 100;

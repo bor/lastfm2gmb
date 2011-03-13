@@ -7,12 +7,11 @@ tags - not realized yet, see TODO
 
 DEPENDENCIES
 
-perl >=5.8 (for utf8 correct use)
-Getopt::Long
+perl v5.8 (for utf8 correct use)
 LWP::UserAgent
 Net::DBus
 XML::Simple
-gmusicbrowser (with Dbus implemented, tested on 1.0.X)
+gmusicbrowser (with Dbus implemented, tested on 1.0.X & 1.1.6)
 
 INSTALLATION
 
