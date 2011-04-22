@@ -67,8 +67,8 @@ $opt{rating_loved} ||= 100;
 $opt{tmp_dir} ||=  File::Spec->catdir( File::Spec->tmpdir(), 'lastfm2gmb' );
 $opt{user} or die "Need username!\n\n$usage\n";
 
-if ( $opt{cache} and ! -d $opt{tmp_dir} ) {
-    mkdir($opt{tmp_dir}) or die "Can't create tmp dir $opt{tmp_dir}: $!";
+if ( $opt{cache} and not -d $opt{tmp_dir} ) {
+    mkdir($opt{tmp_dir}) or die "Can't create tmp dir $opt{tmp_dir}: $!\n";
 }
 die "Unknown mode!\n\n$usage\n" unless $opt{mode}=~/[pl]/;
 
@@ -125,14 +125,13 @@ our $xs = XML::Simple->new(ForceArray=>['track']);
 if ( $opt{mode}=~m/p/ ) {
     # get weekly chart list
     my $charts_data = lastfm_request({method=>'user.getWeeklyChartList'}) or die 'Cant get data from lastfm';
-    # add current (last) week
+    # add current (last) week to chart list
     my $last_week_from = $charts_data->{weeklychartlist}{chart}[$#{$charts_data->{weeklychartlist}{chart}}]{to};
-    push @{$charts_data->{weeklychartlist}{chart}}, { from=>$last_week_from, to=>time() }
-        if $last_week_from < time();
+    my $last_week_to = time() - 1;
+    push @{$charts_data->{weeklychartlist}{chart}}, { from=>$last_week_from, to=>$last_week_to }
+        if $last_week_from < $last_week_to;
     print "LastFM request 'WeeklyChartList' found ".scalar(@{$charts_data->{weeklychartlist}{chart}})." pages\n"
         unless $opt{quiet};
-    # clean 'last week' pages workaround
-    unlink(glob(File::Spec->catfile($opt{tmp_dir},"WeeklyTrackChart-$opt{user}-$last_week_from-*")));
     # get weekly track chart
     print "LastFM request 'WeeklyTrackChart' pages " unless $opt{quiet};
     foreach my $date ( @{$charts_data->{weeklychartlist}{chart}} ) {
@@ -147,7 +146,7 @@ if ( $opt{mode}=~m/p/ ) {
             if ( $gmb_library->{$artist}{$title} and $gmb_library->{$artist}{$title}{id} ) {
                 $lastfm_library->{$artist}{$title}{playcount} += $playcount;
                 $lastfm_library->{$artist}{$title}{lastplay} = $date->{from}
-                    if ( !$lastfm_library->{$artist}{$title}{lastplay}
+                    if ( not $lastfm_library->{$artist}{$title}{lastplay}
                             or $lastfm_library->{$artist}{$title}{lastplay} < $date->{from} );
             }
             $stats{lastfm_plays} += $playcount;
@@ -155,6 +154,8 @@ if ( $opt{mode}=~m/p/ ) {
         last if $opt{debug} >= 3;
     }
     print " total $stats{lastfm_plays} plays\n" unless $opt{quiet};
+    # clean 'last week' pages workaround
+    unlink( glob(File::Spec->catfile($opt{tmp_dir},"WeeklyTrackChart-$opt{user}-$last_week_from-*")) ) unless $opt{debug} >= 2;
 }
 
 # loved tracks (rating)
@@ -168,7 +169,7 @@ if ( $opt{mode}=~m/l/ ) {
     for ( my $p = 1; $p <= $pages; $p++ ) {
         print "$p.." if $opt{debug};
         print '.' unless $opt{quiet};
-        $data = lastfm_request({method=>'user.getLovedTracks',page=>$p}) or die "Cant get data from lastfm";
+        $data = lastfm_request({method=>'user.getLovedTracks',page=>$p}) or die 'Cant get data from lastfm';
         foreach my $title ( keys %{$data->{lovedtracks}{track}} ) {
             my $artist = lc($data->{lovedtracks}{track}{$title}{artist}{name}||$data->{lovedtracks}{track}{$title}{artist}{content});
             $title = lc($title);
